@@ -1,0 +1,74 @@
+# docker-compose.yml
+# ============================================================
+# LearnTn — Full Stack Docker Setup
+# Run: docker-compose up --build
+#
+# Services:
+#   db       → PostgreSQL database
+#   backend  → Node.js Express API
+#   frontend → React (Vite dev server)
+# ============================================================
+
+version: "3.8"
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────
+  db:
+    image: postgres:16
+    container_name: learntm-db
+    environment:
+      POSTGRES_USER: learntm_user
+      POSTGRES_PASSWORD: learntm_pass
+      POSTGRES_DB: learntm_db
+    ports:
+      - "5432:5432"         # expose to host for debugging
+    volumes:
+      - pgdata:/var/lib/postgresql/data  # persist data across restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learntm_user -d learntm_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (Node.js + Express) ──────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: learntm-backend
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: development
+      DB_HOST: db              # use the docker service name
+      DB_PORT: 5432
+      DB_NAME: learntm_db
+      DB_USER: learntm_user
+      DB_PASS: learntm_pass
+      JWT_ACCESS_SECRET: docker_access_secret_change_in_production
+      JWT_REFRESH_SECRET: docker_refresh_secret_change_in_production
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      CLIENT_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy  # wait for DB to be ready
+
+  # ── Frontend (React + Vite) ──────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: learntm-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    depends_on:
+      - backend
+
+# Named volume for PostgreSQL data persistence
+volumes:
+  pgdata:
